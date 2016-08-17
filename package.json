@@ -1,0 +1,28 @@
+{
+  "name": "MendixSecurityAudit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simo101/MendixSecurityAudit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/simo101/MendixSecurityAudit/issues"
+  },
+  "homepage": "https://github.com/simo101/MendixSecurityAudit",
+  "dependencies": {
+    "mendixmodelsdk": "^2.6.3",
+    "mendixplatformsdk": "^2.0.0",
+    "when": "^3.7.7",
+    "node": "^0.0.0",
+    "fs": "^0.0.2",
+    "officegen":"^0.2.8"
+  }
+}
