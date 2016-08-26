@@ -20,7 +20,7 @@ const client = new MendixSdkClient(username, apikey);
 var officegen = require('officegen');
 var docx = officegen('docx');
 var fs = require('fs');
-
+var pObj;
 /*
  * PROJECT TO ANALYZE
  */
@@ -47,31 +47,37 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
 /**
 * This function picks the first navigation document in the project.
 */
-function createUserSecurityDocument(userRoles: security.IUserRole[]):when.Promise<void> {
-    var pObj = docx.createP();
-    return when.all<void>(userRoles.map(role =>addText(role,pObj)));
+function createUserSecurityDocument(userRoles: security.UserRole[]):when.Promise<security.UserRole[]> {
+     pObj = docx.createP();
+    return when.all<security.UserRole[]>(userRoles.map(addText));
 }
 
-function addText(userRole:security.IUserRole,pObj):when.Promise<void>{
+function addText(userRole:security.UserRole):when.Promise<void>{
+
+        return processUsersSecurity(userRole);
+}
+
+function processUsersSecurity(userRole:security.UserRole):when.Promise<void>{
         pObj.addText(userRole.name,{ bold: true, underline: true, font_size:20 } );
         pObj.addLineBreak();
-        return processUsersSecurity(userRole, pObj);
+        return processAllModuleRoles(userRole);
 }
 
-function processUsersSecurity(userRole:security.IUserRole,pObj):when.Promise<void>{
-    
-    return loadAsPromise(userRole).then(userRole =>{
-        return when.all<void>(userRole.moduleRoles.map(role => processModuleRole(role,pObj)));
-    });
+function processAllModuleRoles(userRole:security.UserRole):when.Promise<void>{
+    return when.all<void>(userRole.moduleRoles.map(processModuleRole));
 }
 
-function processModuleRole(role:security.IModuleRole,pObj):when.Promise<void>{
+function loadRole(userRole:security.IUserRole):when.Promise<security.UserRole>{
+    return loadAsPromise(userRole);
+}
+
+function processModuleRole(role:security.IModuleRole):when.Promise<void>{
     if(role!= null){
-        return loadAsPromise(role).then(roleLoaded =>{
-            pObj.addText(roleLoaded.name, { bold: true, underline: false, font_size:15 });
+            pObj.addText(role.name, { bold: true, underline: false, font_size:15 });
             pObj.addLineBreak();
-        });
-    }
+            return;
+    };
+
     return null;
 }
 
@@ -82,7 +88,7 @@ function getAllModules(workingCopy: OnlineWorkingCopy): projects.IModule[] {
 
 }
 function processModules(modules: projects.IModule[]): when.Promise<void> {
-    return when.all<void>(modules.map(module => processModule(module)));
+    return when.all<void>(modules.map(processModule));
 }
 
 function processModule(module: projects.IModule): when.Promise<void> {
@@ -132,7 +138,7 @@ function loadProjectSecurity(workingCopy: OnlineWorkingCopy): when.Promise<secur
     });
 }
 
-function getAllUserRoles(projectSecurity: security.ProjectSecurity): security.IUserRole[] {
+function getAllUserRoles(projectSecurity: security.ProjectSecurity): security.UserRole[] {
     return projectSecurity.userRoles;
 }
 
