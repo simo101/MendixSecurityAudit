@@ -52,6 +52,7 @@ function createUserSecurityDocument(userRoles: security.UserRole[]):when.Promise
     return when.all<security.UserRole[]>(userRoles.map(addText));
 }
 
+<<<<<<< HEAD
 function addText(userRole:security.UserRole):when.Promise<void>{
 
         return processUsersSecurity(userRole);
@@ -79,8 +80,35 @@ function processModuleRole(role:security.IModuleRole):when.Promise<void>{
     };
 
     return null;
+=======
+function addText(userRole:security.IUserRole,pObj):when.Promise<void>{
+        return loadAsPromise(userRole).then(role =>{
+                return processModuleRoles(role,pObj).then(_=>{
+                    pObj.addText(role.name,{ bold: true, underline: true, font_size:20 } );
+                    pObj.addLineBreak();
+                    return;
+                });
+        });
 }
 
+function processModuleRoles(role,pObj):when.Promise<void>{
+    return when.all<void>(role.moduleRoles.map(roleLoaded => loadRole(roleLoaded,pObj)));
+}
+
+function loadRole(moduleRole:security.IModuleRole, pObj):when.Promise<void>{
+    if(moduleRole != null){
+        return loadAsPromise(moduleRole).then(role => addTextForModuleRole(role,pObj));
+    }else{
+        return null;
+    }
+    
+}
+function addTextForModuleRole(role:security.ModuleRole, pObj):when.Promise<void>{
+            pObj.addText(role.name, { bold: true, underline: false, font_size:15 });
+            pObj.addLineBreak();
+            return null;
+>>>>>>> origin/master
+}
 
 function getAllModules(workingCopy: OnlineWorkingCopy): projects.IModule[] {
 
