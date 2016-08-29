@@ -35,7 +35,7 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
         var out = fs.createWriteStream('MendixSecurityDocument.docx');
         docx.generate(out);
         out.on('close', function () {
-            console.log('Finished to create Document');
+            console.log('Finished to creating Document');
         });
     },
     error => {
@@ -47,80 +47,106 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
 /**
 * This function picks the first navigation document in the project.
 */
-function createUserSecurityDocument(userRoles: security.UserRole[]):when.Promise<security.UserRole[]> {
-     pObj = docx.createP();
+function createUserSecurityDocument(userRoles: security.UserRole[]): when.Promise<security.UserRole[]> {
+    pObj = docx.createP();
     return when.all<security.UserRole[]>(userRoles.map(addText));
 }
 
-<<<<<<< HEAD
-function addText(userRole:security.UserRole):when.Promise<void>{
-
-        return processUsersSecurity(userRole);
+function addText(userRole: security.UserRole): when.Promise<projects.Module[]> {
+    return processUsersSecurity(userRole);
 }
 
-function processUsersSecurity(userRole:security.UserRole):when.Promise<void>{
-        pObj.addText(userRole.name,{ bold: true, underline: true, font_size:20 } );
+function processUsersSecurity(userRole: security.UserRole): when.Promise<projects.Module[]> {
+    console.log(`Processing User Role: ${userRole.name}`)
+    pObj.addText(userRole.name, { bold: true, underline: true, font_size: 20 });
+    pObj.addLineBreak();
+    return processAllModules(userRole.model.allModules(), userRole);
+
+}
+
+function processAllModules(modules: projects.IModule[], userRole: security.UserRole): when.Promise<projects.Module[]> {
+    return when.all<projects.Module[]>(modules.map(module => processModule(module, userRole)))
+
+}
+
+function processModule(module: projects.IModule, userRole: security.UserRole): when.Promise<security.ModuleSecurity> {
+    if (module != null) {
+        console.log(`Processing module: ${module.name}`);
+        pObj.addText(module.name, { bold: true, underline: false, font_size: 18 });
         pObj.addLineBreak();
-        return processAllModuleRoles(userRole);
-}
-
-function processAllModuleRoles(userRole:security.UserRole):when.Promise<void>{
-    return when.all<void>(userRole.moduleRoles.map(processModuleRole));
-}
-
-function loadRole(userRole:security.IUserRole):when.Promise<security.UserRole>{
-    return loadAsPromise(userRole);
-}
-
-function processModuleRole(role:security.IModuleRole):when.Promise<void>{
-    if(role!= null){
-            pObj.addText(role.name, { bold: true, underline: false, font_size:15 });
-            pObj.addLineBreak();
-            return;
-    };
-
-    return null;
-=======
-function addText(userRole:security.IUserRole,pObj):when.Promise<void>{
-        return loadAsPromise(userRole).then(role =>{
-                return processModuleRoles(role,pObj).then(_=>{
-                    pObj.addText(role.name,{ bold: true, underline: true, font_size:20 } );
-                    pObj.addLineBreak();
-                    return;
-                });
-        });
-}
-
-function processModuleRoles(role,pObj):when.Promise<void>{
-    return when.all<void>(role.moduleRoles.map(roleLoaded => loadRole(roleLoaded,pObj)));
-}
-
-function loadRole(moduleRole:security.IModuleRole, pObj):when.Promise<void>{
-    if(moduleRole != null){
-        return loadAsPromise(moduleRole).then(role => addTextForModuleRole(role,pObj));
+        return processAllModuleSecurities(getAllModuleSecurities(module),userRole);
     }else{
-        return null;
+        return;
     }
-    
 }
-function addTextForModuleRole(role:security.ModuleRole, pObj):when.Promise<void>{
-            pObj.addText(role.name, { bold: true, underline: false, font_size:15 });
-            pObj.addLineBreak();
-            return null;
->>>>>>> origin/master
+
+function processAllModuleSecurities(moduleSecurities:security.IModuleSecurity[], userRole:security.UserRole):when.Promise<security.ModuleSecurity>{
+    return when.all<security.ModuleSecurity>(moduleSecurities.map(mSecurity => processModSec(mSecurity, userRole)));
+
+}
+
+function getAllModuleSecurities(module: projects.IModule): security.IModuleSecurity[] {
+    return module.model.allModuleSecurities().filter(modSecurity => {
+        if (modSecurity != null) {
+            return modSecurity.moduleName === module.name;
+        } else {
+            return false;
+        }
+
+    });
+}
+
+function processModSec(modSec: security.IModuleSecurity, userRole: security.UserRole): when.Promise<security.ModuleRole> {
+    return when.promise<security.ModuleRole>((resolve, reject) => {
+        modSec.load(loadedModSec => processLoadedModSec(loadedModSec, userRole));
+    });
+}
+
+function processLoadedModSec(modSec: security.ModuleSecurity, userRole: security.UserRole): when.Promise<security.ModuleRole[]> {
+    return when.all<security.ModuleRole[]>(modSec.moduleRoles.map(modRole => processModuleRole(modRole, userRole)));
+}
+
+
+function processModuleRole(role: security.IModuleRole, userRole: security.UserRole): when.Promise<void> {
+    if (role != null) {
+        return loadAsPromise(role).then(loadedRole => addIfModuleRoleInUserRole(loadedRole, userRole));
+
+    } else {
+        return;
+    }
+}
+
+function addIfModuleRoleInUserRole(loadedRole: security.IModuleRole, userRole: security.UserRole): when.Promise<void> {
+    console.log(`Processing module role: ${loadedRole.name}`)
+    if (userRole.moduleRoles.filter(modRole => {
+        if (modRole != null) {
+            return modRole.name === loadedRole.name;
+        } else {
+            return false;
+        }
+    }).length > 0) {
+        pObj.addText(loadedRole.name, { bold: true, underline: false, font_size: 15 });
+        pObj.addLineBreak();
+    }
+    return;
+}
+
+function processModuleRoles(role: security.ModuleSecurity): when.Promise<void> {
+    return when.all<void>(role.moduleRoles.map(loadModuleRole));
+}
+
+function loadModuleRole(moduleRole: security.IModuleRole): when.Promise<void> {
+    if (moduleRole != null) {
+        pObj.addText(moduleRole.name, { bold: true, underline: false, font_size: 13 });
+        pObj.addLineBreak()
+    } else {
+        return;
+    }
+
 }
 
 function getAllModules(workingCopy: OnlineWorkingCopy): projects.IModule[] {
-
     return workingCopy.model().allModules();
-
-}
-function processModules(modules: projects.IModule[]): when.Promise<void> {
-    return when.all<void>(modules.map(processModule));
-}
-
-function processModule(module: projects.IModule): when.Promise<void> {
-    return null;
 }
 
 function processDomainModel(module: projects.IModule, role: security.UserRole): when.Promise<void> {
