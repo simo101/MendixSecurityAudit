@@ -69,37 +69,36 @@ function processAllModules(modules: projects.IModule[], userRole: security.UserR
 
 }
 
-function processModule(module: projects.IModule, userRole: security.UserRole): when.Promise<security.ModuleSecurity> {
+function processModule(module: projects.IModule, userRole: security.UserRole): when.Promise<security.ModuleRole[]> {
     if (module != null) {
         console.log(`Processing module: ${module.name}`);
         pObj.addText(module.name, { bold: true, underline: false, font_size: 18 });
         pObj.addLineBreak();
-        return processAllModuleSecurities(getAllModuleSecurities(module),userRole);
+        return when.all<security.ModuleRole[]>(getAllModuleSecurities(module).map(security => processModSec(security,userRole)));
     }else{
         return;
     }
 }
 
-function processAllModuleSecurities(moduleSecurities:security.IModuleSecurity[], userRole:security.UserRole):when.Promise<security.ModuleSecurity>{
-    return when.all<security.ModuleSecurity>(moduleSecurities.map(mSecurity => processModSec(mSecurity, userRole)));
+function processAllModuleSecurities(moduleSecurities:security.IModuleSecurity[], userRole:security.UserRole):when.Promise<security.ModuleSecurity[]>{
+    return when.all<security.ModuleSecurity[]>(moduleSecurities.map(mSecurity => processModSec(mSecurity, userRole)));
 
 }
 
 function getAllModuleSecurities(module: projects.IModule): security.IModuleSecurity[] {
-    return module.model.allModuleSecurities().filter(modSecurity => {
+        
+        return module.model.allModuleSecurities().filter(modSecurity => {
         if (modSecurity != null) {
             return modSecurity.moduleName === module.name;
         } else {
             return false;
-        }
+        };
 
     });
 }
 
-function processModSec(modSec: security.IModuleSecurity, userRole: security.UserRole): when.Promise<security.ModuleRole> {
-    return when.promise<security.ModuleRole>((resolve, reject) => {
-        modSec.load(loadedModSec => processLoadedModSec(loadedModSec, userRole));
-    });
+function processModSec(modSec: security.IModuleSecurity, userRole: security.UserRole): when.Promise<security.ModuleRole[]> {
+    return when.all<security.ModuleRole[]>(modSec.load().moduleRoles.map(modRole => processModuleRole(modRole, userRole)));
 }
 
 function processLoadedModSec(modSec: security.ModuleSecurity, userRole: security.UserRole): when.Promise<security.ModuleRole[]> {
@@ -109,7 +108,7 @@ function processLoadedModSec(modSec: security.ModuleSecurity, userRole: security
 
 function processModuleRole(role: security.IModuleRole, userRole: security.UserRole): when.Promise<void> {
     if (role != null) {
-        return loadAsPromise(role).then(loadedRole => addIfModuleRoleInUserRole(loadedRole, userRole));
+        return addIfModuleRoleInUserRole(role.load(), userRole);
 
     } else {
         return;
@@ -117,7 +116,7 @@ function processModuleRole(role: security.IModuleRole, userRole: security.UserRo
 }
 
 function addIfModuleRoleInUserRole(loadedRole: security.IModuleRole, userRole: security.UserRole): when.Promise<void> {
-    console.log(`Processing module role: ${loadedRole.name}`)
+    console.log(`Processing module role: ${loadedRole.name}`);
     if (userRole.moduleRoles.filter(modRole => {
         if (modRole != null) {
             return modRole.name === loadedRole.name;
