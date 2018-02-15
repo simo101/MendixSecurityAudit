@@ -9,10 +9,10 @@ import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navi
 import when = require('when');
 
 
-const username = "simon.black@mendix.com";
-const apikey = "ba47d0a1-9991-45ee-a14d-d0c1b73d5279";
-const projectId = "2c73da5b-ccc6-44a2-99ea-be4e87bb5287";
-const projectName = "Company Expenses";
+const username = "{username}";
+const apikey = "{apikey}";
+const projectId = "{projectID}";
+const projectName = "{projectName}";
 const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 const wc = null;
@@ -21,6 +21,110 @@ var officegen = require('officegen');
 var docx = officegen('docx');
 var fs = require('fs');
 var pObj;
+const tableStyle = {
+    tableColWidth: 4261,
+    tableSize: 24,
+    tableAlign: "left",
+    tableFontFamily: "Arial",
+    borders: true,
+    sz: '10'
+}
+  
+var table: any[] = [
+    [
+        {
+            val: "User Role",
+            opts: {
+              b:true,
+              sz: '10',
+              color:"000000",
+              shd: {
+                fill: "EEEEEE",
+                "themeFillTint": "80"
+              },
+              fontFamily: "Arial"
+            }
+        },
+        {
+            val: "Module",
+            opts: {
+              sz: '10',
+              b:true,
+              color:"000000",
+              shd: {
+                fill: "EEEEEE",
+                "themeFillTint": "80"
+              },
+              fontFamily: "Arial"
+            }
+        },
+        {
+            val: "Module Role",
+            opts: {
+              sz: '10',
+              b:true,
+              color:"000000",
+              shd: {
+                fill: "EEEEEE",
+                "themeFillTint": "80"
+              },
+              fontFamily: "Arial"
+            }
+        },
+        
+    {
+      val: "Entity",
+      opts: {
+        b:true,
+        sz: '10',
+        color:"000000",
+        shd: {
+          fill: "EEEEEE",
+          "themeFillTint": "80"
+        },
+        fontFamily: "Arial"
+      }
+    },{
+      val: "Xpath",
+      opts: {
+        b:true,
+        sz: '10',
+        color: "000000",
+        align: "left",
+        shd: {
+          fill: "EEEEEE",
+          "themeFillTint": "80"
+        }
+      }
+    },{
+      val: "Create/Delete",
+      opts: {
+        sz: '10',
+        align: "center",
+        vAlign: "center",
+        color:"000000",
+        b:true,
+        shd: {
+          fill: "EEEEEE",
+          "themeFillTint": "80"
+        }
+      }
+    },{
+        val: "Member Rules",
+        opts: {
+          align: "center",
+          vAlign: "center",
+          sz: '10',
+          color:"000000",
+          b:true,
+          shd: {
+            fill: "EEEEEE",
+            "themeFillTint": "80"
+          }
+        }
+      }]
+  ]
+  
 /*
  * PROJECT TO ANALYZE
  */
@@ -32,6 +136,8 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
     .then(userRoles => createUserSecurityDocument(userRoles))
     .done(
     () => {
+        console.log(table);
+        docx.createTable (table, tableStyle);
         var out = fs.createWriteStream('MendixSecurityDocument.docx');
         docx.generate(out);
         out.on('close', function () {
@@ -58,39 +164,35 @@ function addText(userRole: security.UserRole): when.Promise<void> {
 
 function processUsersSecurity(userRole: security.UserRole): when.Promise<void> {
     console.log(`Processing User Role: ${userRole.name}`)
-    pObj.addText(userRole.name, { bold: true, underline: true, font_size: 20 });
-    pObj.addLineBreak();
+    // pObj.addText(userRole.name, { bold: true, underline: true, font_size: 18 });
+    // pObj.addLineBreak();
     return processAllModules(userRole.model.allModules(), userRole);
-
+    
 }
 
 function processAllModules(modules: projects.IModule[], userRole: security.UserRole): when.Promise<void> {
-    return when.all<void>(modules.map((module) => { return processModule(module, userRole) }))
+    // pObj.addLineBreak();
+    return when.all<void>(modules.map(module => processModule(module, userRole)))
 
 }
 
 function processModule(module: projects.IModule, userRole: security.UserRole): when.Promise<void> {
     console.log(`Processing module: ${module.name}`);
-    pObj.addText(module.name, { bold: true, underline: false, font_size: 18 });
-    pObj.addLineBreak();
+    // pObj.addText(module.name, { bold: true, underline: false, font_size: 16 });
+    // pObj.addLineBreak();
      var securities = getAllModuleSecurities(module);
-    return when.all<void>([loadAllModuleSecurities(securities,userRole)]);
+    return when.all<void>(securities.map(security => loadAllModuleSecurities(securities,userRole)));
+    
 }
 
 function loadAllModuleSecurities(moduleSecurities: security.IModuleSecurity[], userRole: security.UserRole): when.Promise<void> {
-    return when.all<void>(moduleSecurities.map((mSecurity) => { return loadModSec(mSecurity).then(loadedMSec =>{
-        return when.all<void>([processLoadedModSec(loadedMSec,userRole)]);
-    }) }));
-}
-
-function processAllLoadedSecurities(moduleSecurities: security.ModuleSecurity[], userRole: security.UserRole): when.Promise<void> {
-    return when.all<void>(moduleSecurities.map((secure) => { return processLoadedModSec(secure, userRole) }));
+    return when.all<void>(moduleSecurities.map(mSecurity => processLoadedModSec(mSecurity,userRole)));
 }
 
 function getAllModuleSecurities(module: projects.IModule): security.IModuleSecurity[] {
     return module.model.allModuleSecurities().filter(modSecurity => {
         if (modSecurity != null) {
-            return modSecurity.moduleName === module.name;
+            return modSecurity.containerAsModule.name === module.name;
         } else {
             return false;
         };
@@ -102,30 +204,77 @@ function loadModSec(modSec: security.IModuleSecurity): when.Promise<security.Mod
     return loadAsPromise(modSec);
 }
 
-function processLoadedModSec(modSec: security.ModuleSecurity, userRole: security.UserRole): when.Promise<void> {
-    return when.all<void>(modSec.moduleRoles.map((modRole) => {
-        return addIfModuleRoleInUserRole(modRole, userRole)
-    }));
+function processLoadedModSec(modSec: security.IModuleSecurity, userRole: security.UserRole):when.Promise<void>{
+    return when.all<void>(modSec.moduleRoles.map(modRole => processModRole(modRole,userRole)));
 }
 
-function addIfModuleRoleInUserRole(modRole: security.IModuleRole, userRole: security.UserRole): when.Promise<void> {
-    return loadAsPromise(modRole).then(loadedRole => {
-        console.log(`Processing module role: ${loadedRole.name}`);
-        if (userRole.moduleRoles.filter(modRole => {
-            if (modRole != null) {
-                return modRole.name === loadedRole.name;
+function processModRole(modRole:security.IModuleRole, userRole:security.UserRole):when.Promise<void>{
+    if(addIfModuleRoleInUserRole(modRole, userRole)){
+        // pObj.addText(modRole.name, { bold: false, underline: false, font_size: 12 });
+        // pObj.addLineBreak();
+        return detailEntitySecurity(modRole,userRole);
+    }
+}
+
+function detailEntitySecurity(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{  
+    return when.all<void>(modRole.containerAsModuleSecurity.containerAsModule.domainModel.entities.map(entity =>
+        processAllEntitySecurityRules(entity,modRole,userRole)));
+}
+
+function processAllEntitySecurityRules(entity:domainmodels.IEntity,moduleRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
+    return loadAsPromise(entity).then(loadedEntity => 
+        checkIfModuleRoleIsUsedForEntityRole(loadedEntity,loadedEntity.accessRules, moduleRole,userRole));
+}
+
+function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessRules:domainmodels.AccessRule[], modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
+    return when.all<void>(
+        accessRules.map(rule =>{
+            var memberRules = ``;
+            if(rule.moduleRoles.filter(entityModRule =>{
+                return entityModRule.name === modRole.name;
+            }).length > 0){
+                    rule.memberAccesses.map(memRule =>{
+                        if(memRule != null){
+                            if(memRule.accessRights!= null && memRule.attribute != null){
+                                memberRules += `${memRule.attribute.name}: ${memRule.accessRights.name}\n`;
+                            }
+                        }
+                        
+                    }
+                );
+                var createDelete;
+                if(rule.allowCreate && rule.allowDelete){
+                    createDelete = `Create/Delete`
+                 }else if(rule.allowCreate){
+                    createDelete = `Create`
+                 }else if(rule.allowDelete){
+                    createDelete = `Delete`
+                 }else{
+                    createDelete = `None`
+                 }
+                table.push([`${userRole.name}`,`${entity.containerAsDomainModel.containerAsModule.name}`,`${modRole.name}`,`${entity.name}`,`${rule.xPathConstraint}`,`${createDelete}`,`${memberRules}`]);
+                console.log(`${userRole.name},${entity.containerAsDomainModel.containerAsModule.name},${modRole.name},${entity.name},${rule.xPathConstraint},${createDelete},${memberRules}`);
+            }
+        })
+    );
+
+}
+
+function addIfModuleRoleInUserRole(modRole: security.IModuleRole, userRole: security.UserRole): boolean{
+        console.log(`Processing module role: ${modRole.name}`);
+        if (userRole.moduleRoles.filter(modRoleFilter => {
+            if (modRoleFilter != null) {
+                return modRoleFilter.name === modRole.name;
             } else {
                 return false;
             }
         }).length > 0) {
-            pObj.addText(loadedRole.name, { bold: true, underline: false, font_size: 15 });
-            pObj.addLineBreak();
+            return true;
+        }else{
+            return false;
         }
-        return;
-    });
+        
 }
-
-
 
 function getAllModules(workingCopy: OnlineWorkingCopy): projects.IModule[] {
     return workingCopy.model().allModules();
