@@ -9,7 +9,7 @@ import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navi
 import when = require('when');
 
 
-const username = "{username}";
+const username = "{Username}";
 const apikey = "{apikey}";
 const projectId = "{projectID}";
 const projectName = "{projectName}";
@@ -18,112 +18,21 @@ const branchName = null // null for mainline
 const wc = null;
 const client = new MendixSdkClient(username, apikey);
 var officegen = require('officegen');
-var docx = officegen('docx');
+var xlsx = officegen('xlsx');
 var fs = require('fs');
 var pObj;
-const tableStyle = {
-    tableColWidth: 4261,
-    tableSize: 24,
-    tableAlign: "left",
-    tableFontFamily: "Arial",
-    borders: true,
-    sz: '10'
-}
-  
-var table: any[] = [
-    [
-        {
-            val: "User Role",
-            opts: {
-              b:true,
-              sz: '10',
-              color:"000000",
-              shd: {
-                fill: "EEEEEE",
-                "themeFillTint": "80"
-              },
-              fontFamily: "Arial"
-            }
-        },
-        {
-            val: "Module",
-            opts: {
-              sz: '10',
-              b:true,
-              color:"000000",
-              shd: {
-                fill: "EEEEEE",
-                "themeFillTint": "80"
-              },
-              fontFamily: "Arial"
-            }
-        },
-        {
-            val: "Module Role",
-            opts: {
-              sz: '10',
-              b:true,
-              color:"000000",
-              shd: {
-                fill: "EEEEEE",
-                "themeFillTint": "80"
-              },
-              fontFamily: "Arial"
-            }
-        },
-        
-    {
-      val: "Entity",
-      opts: {
-        b:true,
-        sz: '10',
-        color:"000000",
-        shd: {
-          fill: "EEEEEE",
-          "themeFillTint": "80"
-        },
-        fontFamily: "Arial"
-      }
-    },{
-      val: "Xpath",
-      opts: {
-        b:true,
-        sz: '10',
-        color: "000000",
-        align: "left",
-        shd: {
-          fill: "EEEEEE",
-          "themeFillTint": "80"
-        }
-      }
-    },{
-      val: "Create/Delete",
-      opts: {
-        sz: '10',
-        align: "center",
-        vAlign: "center",
-        color:"000000",
-        b:true,
-        shd: {
-          fill: "EEEEEE",
-          "themeFillTint": "80"
-        }
-      }
-    },{
-        val: "Member Rules",
-        opts: {
-          align: "center",
-          vAlign: "center",
-          sz: '10',
-          color:"000000",
-          b:true,
-          shd: {
-            fill: "EEEEEE",
-            "themeFillTint": "80"
-          }
-        }
-      }]
-  ]
+
+const sheet = xlsx.makeNewSheet ();
+sheet.name = 'Excel Test';
+
+sheet.data[0]=[];
+sheet.data[0][0] = `User Role`;
+sheet.data[0][1] = `Module`;
+sheet.data[0][2] = `Module Role`;
+sheet.data[0][3] = `Entity`;
+sheet.data[0][4] = `Xpath`;
+sheet.data[0][5] = `Create/Delete`;
+sheet.data[0][6] = `Member Rules`;
   
 /*
  * PROJECT TO ANALYZE
@@ -136,10 +45,8 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
     .then(userRoles => createUserSecurityDocument(userRoles))
     .done(
     () => {
-        console.log(table);
-        docx.createTable (table, tableStyle);
-        var out = fs.createWriteStream('MendixSecurityDocument.docx');
-        docx.generate(out);
+        var out = fs.createWriteStream('MendixSecurityDocument.xlsx');
+        xlsx.generate(out);
         out.on('close', function () {
             console.log('Finished to creating Document');
         });
@@ -154,7 +61,6 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
 * This function picks the first navigation document in the project.
 */
 function createUserSecurityDocument(userRoles: security.UserRole[]): when.Promise<security.UserRole[]> {
-    pObj = docx.createP();
     return when.all<security.UserRole[]>(userRoles.map(addText));
 }
 
@@ -204,7 +110,7 @@ function loadModSec(modSec: security.IModuleSecurity): when.Promise<security.Mod
     return loadAsPromise(modSec);
 }
 
-function processLoadedModSec(modSec: security.IModuleSecurity, userRole: security.UserRole):when.Promise<void>{
+function processLoadedModSec(modSec: security.IModuleSecurity, userRole: security.UserRole, ):when.Promise<void>{
     return when.all<void>(modSec.moduleRoles.map(modRole => processModRole(modRole,userRole)));
 }
 
@@ -216,7 +122,8 @@ function processModRole(modRole:security.IModuleRole, userRole:security.UserRole
     }
 }
 
-function detailEntitySecurity(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{  
+function detailEntitySecurity(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
+     
     return when.all<void>(modRole.containerAsModuleSecurity.containerAsModule.domainModel.entities.map(entity =>
         processAllEntitySecurityRules(entity,modRole,userRole)));
 }
@@ -252,7 +159,7 @@ function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessR
                  }else{
                     createDelete = `None`
                  }
-                table.push([`${userRole.name}`,`${entity.containerAsDomainModel.containerAsModule.name}`,`${modRole.name}`,`${entity.name}`,`${rule.xPathConstraint}`,`${createDelete}`,`${memberRules}`]);
+                sheet.data.push([`${userRole.name}`,`${entity.containerAsDomainModel.containerAsModule.name}`,`${modRole.name}`,`${entity.name}`,`${rule.xPathConstraint}`,`${createDelete}`,`${memberRules}`]);
                 console.log(`${userRole.name},${entity.containerAsDomainModel.containerAsModule.name},${modRole.name},${entity.name},${rule.xPathConstraint},${createDelete},${memberRules}`);
             }
         })
