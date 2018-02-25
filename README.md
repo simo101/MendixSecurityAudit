@@ -1,4 +1,4 @@
-# SDK User Visualisation
+# SDK Security Audit
 ## Setup
 To set up and use the sdk you need to have node js installed on your machine. You will need to have also installed typescript and tsd.
 The following command will install typescript and tsd globally for you:
@@ -6,7 +6,7 @@ The following command will install typescript and tsd globally for you:
 `npm install -g typescript tsd`
 
 Open up the folder using node.js.
-To install the sdkuservisualisation you should type the command:
+To install the security audit you should type the command:
 
 `npm install`
 
