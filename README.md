@@ -30,14 +30,12 @@ To connect it to your project you need to change the following constants in the 
 
 API keys can be found in the mendix home portal.
 
-## Use the visualisation
-Once the visualiser is installed type:
+## Use the audit generator
+Once the node packages are installed type:
 `tsc`
-to compile the visualisation code.
+to compile the audit generator code.
 
 Then after compiled type:
 `node script.js`
 
-This will start running the script. Once the script has completed visualising your project it will load up a browser to display the visualisation.
-
-<img src="img/visualisation.png"></img>
+This will start running the script. Once the script has completed you will have an excel file named Mendix Security Document.
