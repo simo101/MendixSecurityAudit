@@ -9,10 +9,10 @@ import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navi
 import when = require('when');
 
 
-const username = "{Username}";
-const apikey = "{apikey}";
-const projectId = "{projectID}";
-const projectName = "{projectName}";
+const username = "{{Username}}";
+const apikey = "{{APIKey}}";
+const projectId = "{{ProjectID}}";
+const projectName = "{{ProjectName}}";
 const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 const wc = null;
@@ -23,7 +23,7 @@ var fs = require('fs');
 var pObj;
 
 const sheet = xlsx.makeNewSheet ();
-sheet.name = 'Excel Test';
+sheet.name = 'Entities';
 
 sheet.data[0]=[];
 sheet.data[0][0] = `User Role`;
@@ -33,6 +33,26 @@ sheet.data[0][3] = `Entity`;
 sheet.data[0][4] = `Xpath`;
 sheet.data[0][5] = `Create/Delete`;
 sheet.data[0][6] = `Member Rules`;
+
+const sheetPages = xlsx.makeNewSheet ();
+sheetPages.name = 'Pages';
+
+sheetPages.data[0]=[];
+sheetPages.data[0][0] = `User Role`;
+sheetPages.data[0][1] = `Module`;
+sheetPages.data[0][2] = `Module Role`;
+sheetPages.data[0][3] = `Page Name`;
+sheetPages.data[0][4] = `Allowed`;
+
+const sheetMicroflows = xlsx.makeNewSheet ();
+sheetMicroflows.name = 'Microflows';
+
+sheetMicroflows.data[0]=[];
+sheetMicroflows.data[0][0] = `User Role`;
+sheetMicroflows.data[0][1] = `Module`;
+sheetMicroflows.data[0][2] = `Module Role`;
+sheetMicroflows.data[0][3] = `Microflows`;
+sheetMicroflows.data[0][4] = `Allowed`;
   
 /*
  * PROJECT TO ANALYZE
@@ -70,23 +90,17 @@ function addText(userRole: security.UserRole): when.Promise<void> {
 
 function processUsersSecurity(userRole: security.UserRole): when.Promise<void> {
     console.log(`Processing User Role: ${userRole.name}`)
-    // pObj.addText(userRole.name, { bold: true, underline: true, font_size: 18 });
-    // pObj.addLineBreak();
     return processAllModules(userRole.model.allModules(), userRole);
     
 }
 
 function processAllModules(modules: projects.IModule[], userRole: security.UserRole): when.Promise<void> {
-    // pObj.addLineBreak();
     return when.all<void>(modules.map(module => processModule(module, userRole)))
-
 }
 
 function processModule(module: projects.IModule, userRole: security.UserRole): when.Promise<void> {
     console.log(`Processing module: ${module.name}`);
-    // pObj.addText(module.name, { bold: true, underline: false, font_size: 16 });
-    // pObj.addLineBreak();
-     var securities = getAllModuleSecurities(module);
+    var securities = getAllModuleSecurities(module);
     return when.all<void>(securities.map(security => loadAllModuleSecurities(securities,userRole)));
     
 }
@@ -116,16 +130,49 @@ function processLoadedModSec(modSec: security.IModuleSecurity, userRole: securit
 
 function processModRole(modRole:security.IModuleRole, userRole:security.UserRole):when.Promise<void>{
     if(addIfModuleRoleInUserRole(modRole, userRole)){
-        // pObj.addText(modRole.name, { bold: false, underline: false, font_size: 12 });
-        // pObj.addLineBreak();
         return detailEntitySecurity(modRole,userRole);
     }
 }
 
 function detailEntitySecurity(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
-     
     return when.all<void>(modRole.containerAsModuleSecurity.containerAsModule.domainModel.entities.map(entity =>
-        processAllEntitySecurityRules(entity,modRole,userRole)));
+        processAllEntitySecurityRules(entity,modRole,userRole))).then(()=> processAllPages(modRole,userRole)).then(()=>processAllMicroflows(modRole,userRole));
+}
+
+function processAllPages(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
+    return when.all<void>(modRole.model.allPages().map(page => processPage(modRole,userRole,page)));
+}
+
+function processPage(modRole:security.IModuleRole, userRole:security.UserRole, page:pages.IPage):when.Promise<void>{
+        return loadAsPromise(page).then(loadedPage =>addPage(modRole,userRole,loadedPage));       
+}
+
+function addPage(modRole:security.IModuleRole, userRole:security.UserRole, loadedPage:pages.Page){
+    if(loadedPage.allowedRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
+        sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`]);
+        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`);
+    }else{
+        sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`]);
+        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`);
+
+    }
+}
+
+function processAllMicroflows(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
+    return when.all<void>(modRole.model.allMicroflows().map(microflow => processMicroflow(modRole,userRole,microflow)));
+}
+
+function processMicroflow(modRole:security.IModuleRole, userRole:security.UserRole, microflow:microflows.IMicroflow):when.Promise<void>{
+        return loadAsPromise(microflow).then(microflowLoaded => addMicroflow(modRole,userRole,microflowLoaded));
+}
+function addMicroflow(modRole:security.IModuleRole, userRole:security.UserRole, microflowLoaded:microflows.Microflow){
+    if(microflowLoaded.allowedModuleRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
+        sheetMicroflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`]);
+        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`);
+    }else{
+        sheetMicroflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`]);
+        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`);
+    }
 }
 
 function processAllEntitySecurityRules(entity:domainmodels.IEntity,moduleRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
