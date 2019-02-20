@@ -10,13 +10,7 @@ To install the security audit you should type the command:
 
 `npm install`
 
-This is will install the sdk visualisation and all the relevant dependencies.
-
-Then type:
-
-`tsd install`
-
-This will install all the necessary typings. This will only work if you have installed tsd before hand.
+This is will install the security audit and all the relevant dependencies.
 
 To connect it to your project you need to change the following constants in the `script.ts`
 

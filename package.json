@@ -18,11 +18,11 @@
   },
   "homepage": "https://github.com/simo101/MendixSecurityAudit",
   "dependencies": {
-    "mendixmodelsdk": "^4.7.0",
-    "mendixplatformsdk": "^4.0.0",
-    "node": "^0.0.0",
+    "mendixmodelsdk": "^4.19.0",
+    "mendixplatformsdk": "^4.1.0",
     "fs": "^0.0.2",
     "@types/when": "2.4.29",
-    "officegen": "^0.2.8"
+    "officegen": "^0.2.8",
+    "@types/node": "11.9.4"
   }
 }

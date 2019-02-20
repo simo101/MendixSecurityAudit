@@ -1,7 +1,3 @@
-/// <reference path='./typings/tsd.d.ts' />
-
-'use strict';
-
 import { MendixSdkClient, OnlineWorkingCopy, Project, Revision, Branch, loadAsPromise } from "mendixplatformsdk";
 import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus } from "mendixmodelsdk";
 
@@ -132,6 +128,7 @@ function processModRole(modRole:security.IModuleRole, userRole:security.UserRole
     if(addIfModuleRoleInUserRole(modRole, userRole)){
         return detailEntitySecurity(modRole,userRole);
     }
+    return when.resolve();
 }
 
 function detailEntitySecurity(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
@@ -243,17 +240,6 @@ function checkEntity(entity: domainmodels.IEntity) {
         ent.accessRules
     });
 }
-
-function processDocument(document: projects.IDocument, role: security.UserRole): when.Promise<void> {
-    if (document instanceof microflows.MicroflowBase) {
-        return null;
-    } else if (document instanceof pages.Page) {
-
-        return null;
-    }
-    return null;
-}
-
 
 /**
 * This function loads the project security.
