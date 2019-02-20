@@ -54,24 +54,31 @@ sheetMicroflows.data[0][4] = `Allowed`;
  * PROJECT TO ANALYZE
  */
 const project = new Project(client, projectId, projectName);
+main();
 
-client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branch(project, branchName)))
-    .then(workingCopy => loadProjectSecurity(workingCopy))
-    .then(projectSecurity => getAllUserRoles(projectSecurity))
-    .then(userRoles => createUserSecurityDocument(userRoles))
-    .done(
-    () => {
-        var out = fs.createWriteStream('MendixSecurityDocument.xlsx');
-        xlsx.generate(out);
-        out.on('close', function () {
-            console.log('Finished to creating Document');
-        });
-    },
-    error => {
-        console.log("Something went wrong:");
-        console.dir(error);
-    }
-    );
+
+async function main(){
+
+    const workingCopy = await loadWorkingCopy(project, new Revision(revNo, new Branch(project, branchName)));
+
+    const projectSecurity = await loadProjectSecurity(workingCopy);
+
+    const userRoles = await getAllUserRoles(projectSecurity);
+    
+    const securityDocument = await createUserSecurityDocument(userRoles);
+
+    var out = fs.createWriteStream('MendixSecurityDocument.xlsx');
+    xlsx.generate(out);
+    out.on('close', function () {
+        console.log('Finished to creating Document');
+    });
+
+
+}
+
+function loadWorkingCopy(project:Project, revision:Revision):when.Promise<OnlineWorkingCopy>{
+    return client.platform().createOnlineWorkingCopy(project, revision);
+}
 
 /**
 * This function picks the first navigation document in the project.
