@@ -8,7 +8,7 @@ import when = require('when');
 const username = "{{Username}}";
 const apikey = "{{APIKey}}";
 const projectId = "{{ProjectID}}";
-const projectName = "{{ProjectName}}";
+const projectName = "{{APIKey}}";
 const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 const wc = null;
@@ -56,6 +56,15 @@ sheetMicroflows.data[0][4] = `Allowed`;
 const project = new Project(client, projectId, projectName);
 main();
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.log('Unhandled Rejection at:', reason.stack || reason)
+});
+
+process.on('warning', (warning) => {
+  console.warn(warning.name);    // Print the warning name
+  console.warn(warning.message); // Print the warning message
+  console.warn(warning.stack);   // Print the stack trace
+});
 
 async function main(){
 
@@ -113,8 +122,10 @@ function loadAllModuleSecurities(moduleSecurities: security.IModuleSecurity[], u
 }
 
 function getAllModuleSecurities(module: projects.IModule): security.IModuleSecurity[] {
+    console.log(`Processing getAllModuleSecurities: ${module.name}`);
     return module.model.allModuleSecurities().filter(modSecurity => {
         if (modSecurity != null) {
+			console.log(`Mod Security is not null: ${modSecurity.containerAsModule.name}`);
             return modSecurity.containerAsModule.name === module.name;
         } else {
             return false;
@@ -124,6 +135,7 @@ function getAllModuleSecurities(module: projects.IModule): security.IModuleSecur
 }
 
 function loadModSec(modSec: security.IModuleSecurity): when.Promise<security.ModuleSecurity> {
+    console.log(`Processing loadModSec`);
     return loadAsPromise(modSec);
 }
 
@@ -152,15 +164,17 @@ function processPage(modRole:security.IModuleRole, userRole:security.UserRole, p
 }
 
 function addPage(modRole:security.IModuleRole, userRole:security.UserRole, loadedPage:pages.Page){
-    if(loadedPage.allowedRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
-        sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`);
-    }else{
-        sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`);
-
-    }
+	if(loadedPage.allowedRoles.filter(allowedRole => allowedRole?.name == modRole.name).length > 0){
+		sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`]);
+		//console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`);
+		console.log(`Add page: ${modRole.name}`,`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`);
+	}else{
+		sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`]);
+		//console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`);
+	}
 }
+
+
 
 function processAllMicroflows(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
     return when.all<void>(modRole.model.allMicroflows().map(microflow => processMicroflow(modRole,userRole,microflow)));
@@ -170,12 +184,13 @@ function processMicroflow(modRole:security.IModuleRole, userRole:security.UserRo
         return loadAsPromise(microflow).then(microflowLoaded => addMicroflow(modRole,userRole,microflowLoaded));
 }
 function addMicroflow(modRole:security.IModuleRole, userRole:security.UserRole, microflowLoaded:microflows.Microflow){
-    if(microflowLoaded.allowedModuleRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
+    if(microflowLoaded.allowedModuleRoles.filter(allowedRole => allowedRole?.name == modRole.name).length > 0){
         sheetMicroflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`);
+        //console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`);
+		console.log(`Add MF: ${modRole.name}`,`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`);
     }else{
         sheetMicroflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`);
+        //console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`);
     }
 }
 
@@ -211,7 +226,7 @@ function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessR
                     createDelete = `None`
                  }
                 sheet.data.push([`${userRole.name}`,`${entity.containerAsDomainModel.containerAsModule.name}`,`${modRole.name}`,`${entity.name}`,`${rule.xPathConstraint}`,`${createDelete}`,`${memberRules}`]);
-                console.log(`${userRole.name},${entity.containerAsDomainModel.containerAsModule.name},${modRole.name},${entity.name},${rule.xPathConstraint},${createDelete},${memberRules}`);
+                //console.log(`${userRole.name},${entity.containerAsDomainModel.containerAsModule.name},${modRole.name},${entity.name},${rule.xPathConstraint},${createDelete},${memberRules}`);
             }
         })
     );
@@ -219,7 +234,7 @@ function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessR
 }
 
 function addIfModuleRoleInUserRole(modRole: security.IModuleRole, userRole: security.UserRole): boolean{
-        console.log(`Processing module role: ${modRole.name}`);
+        //console.log(`Processing module role: ${modRole.name}`);
         if (userRole.moduleRoles.filter(modRoleFilter => {
             if (modRoleFilter != null) {
                 return modRoleFilter.name === modRole.name;
