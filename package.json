@@ -2,7 +2,7 @@
   "name": "MendixSecurityAudit",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "script.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -18,11 +18,10 @@
   },
   "homepage": "https://github.com/simo101/MendixSecurityAudit",
   "dependencies": {
-    "mendixmodelsdk": "^4.19.0",
-    "mendixplatformsdk": "^4.1.0",
-    "fs": "^0.0.2",
-    "@types/when": "2.4.29",
-    "officegen": "^0.2.8",
-    "@types/node": "11.9.4"
+    "@types/node": "11.9.4",
+    "fs": "^0.0.1-security"n,
+    "mendixmodelsdk": "^4.67.0",
+    "mendixplatformsdk": "^5.1.1",
+    "officegen": "^0.6.5"
   }
 }
