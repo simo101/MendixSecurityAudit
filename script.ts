@@ -1,6 +1,6 @@
 import { MendixPlatformClient, OnlineWorkingCopy} from "mendixplatformsdk";
 import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus, IList } from "mendixmodelsdk";
-const appId = "459cff60-5cc7-4af1-8616-d3d535a1b258";
+const appId = "{{appID}}";
 const branchName = null // null for mainline
 const wc = null;
 const client = new MendixPlatformClient();
