@@ -1,18 +1,9 @@
-import { MendixSdkClient, OnlineWorkingCopy, Project, Revision, Branch, loadAsPromise } from "mendixplatformsdk";
-import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus } from "mendixmodelsdk";
-
-
-import when = require('when');
-
-
-const username = "{{Username}}";
-const apikey = "{{APIKey}}";
-const projectId = "{{ProjectID}}";
-const projectName = "{{ProjectName}}";
-const revNo = -1; // -1 for latest
+import { MendixPlatformClient, OnlineWorkingCopy} from "mendixplatformsdk";
+import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus, IList } from "mendixmodelsdk";
+const appId = "459cff60-5cc7-4af1-8616-d3d535a1b258";
 const branchName = null // null for mainline
 const wc = null;
-const client = new MendixSdkClient(username, apikey);
+const client = new MendixPlatformClient();
 var officegen = require('officegen');
 var xlsx = officegen('xlsx');
 var fs = require('fs');
@@ -53,68 +44,76 @@ sheetMicroflows.data[0][4] = `Allowed`;
 /*
  * PROJECT TO ANALYZE
  */
-const project = new Project(client, projectId, projectName);
+const app = client.getApp(appId);
 main();
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.log('Unhandled Rejection at:', reason.stack || reason)
+});
+
+process.on('warning', (warning) => {
+  console.warn(warning.name);    // Print the warning name
+  console.warn(warning.message); // Print the warning message
+  console.warn(warning.stack);   // Print the stack trace
+});
 
 async function main(){
 
-    const workingCopy = await loadWorkingCopy(project, new Revision(revNo, new Branch(project, branchName)));
+    var repository = app.getRepository();
+    var useBranch:string ="";
+
+    if(branchName === null){
+        var repositoryInfo = await repository.getInfo();
+        if (repositoryInfo.type === `svn`)
+            useBranch = `trunk`;
+        else
+            useBranch = `main`;
+    }else{
+        useBranch = branchName;
+    }
+
+    const workingCopy = await app.createTemporaryWorkingCopy(useBranch);
 
     const projectSecurity = await loadProjectSecurity(workingCopy);
 
-    const userRoles = await getAllUserRoles(projectSecurity);
+    const userRoles = getAllUserRoles(projectSecurity);
     
     const securityDocument = await createUserSecurityDocument(userRoles);
 
-    var out = fs.createWriteStream('MendixSecurityDocument.xlsx');
+    var out = await fs.createWriteStream('MendixSecurityDocument.xlsx');
     xlsx.generate(out);
     out.on('close', function () {
-        console.log('Finished to creating Document');
+        console.log('Finished creating Document');
     });
 
 
 }
 
-function loadWorkingCopy(project:Project, revision:Revision):when.Promise<OnlineWorkingCopy>{
-    return client.platform().createOnlineWorkingCopy(project, revision);
-}
-
 /**
 * This function picks the first navigation document in the project.
 */
-function createUserSecurityDocument(userRoles: security.UserRole[]): when.Promise<security.UserRole[]> {
-    return when.all<security.UserRole[]>(userRoles.map(addText));
+async function createUserSecurityDocument(userRoles: security.UserRole[]){
+    console.log("Creating User Access Matrix");
+    await Promise.all(userRoles.map(async (userRole) => processAllModules(userRole)));
 }
 
-function addText(userRole: security.UserRole): when.Promise<void> {
-    return processUsersSecurity(userRole);
+async function processAllModules(userRole: security.UserRole):Promise<void>{
+    // console.debug("processAllModules");
+    var modules = userRole.model.allModules();
+    await Promise.all(modules.map(async (module) => processModule(module, userRole)));
 }
 
-function processUsersSecurity(userRole: security.UserRole): when.Promise<void> {
-    console.log(`Processing User Role: ${userRole.name}`)
-    return processAllModules(userRole.model.allModules(), userRole);
+async function processModule(module: projects.IModule, userRole: security.UserRole):Promise<void> {
+    // console.debug(`Processing module: ${module.name}`);
+    var securities = await getAllModuleSecurities(module);
+    await Promise.all(securities.map(async (security) => loadAllModuleSecurities(securities,userRole)));
     
 }
-
-function processAllModules(modules: projects.IModule[], userRole: security.UserRole): when.Promise<void> {
-    return when.all<void>(modules.map(module => processModule(module, userRole)))
-}
-
-function processModule(module: projects.IModule, userRole: security.UserRole): when.Promise<void> {
-    console.log(`Processing module: ${module.name}`);
-    var securities = getAllModuleSecurities(module);
-    return when.all<void>(securities.map(security => loadAllModuleSecurities(securities,userRole)));
-    
-}
-
-function loadAllModuleSecurities(moduleSecurities: security.IModuleSecurity[], userRole: security.UserRole): when.Promise<void> {
-    return when.all<void>(moduleSecurities.map(mSecurity => processLoadedModSec(mSecurity,userRole)));
-}
-
-function getAllModuleSecurities(module: projects.IModule): security.IModuleSecurity[] {
+async function getAllModuleSecurities(module: projects.IModule): Promise<security.IModuleSecurity[]> {
+    // console.debug(`Processing getAllModuleSecurities: ${module.name}`);
     return module.model.allModuleSecurities().filter(modSecurity => {
         if (modSecurity != null) {
+			console.debug(`Mod Security is not null: ${modSecurity.containerAsModule.name}`);
             return modSecurity.containerAsModule.name === module.name;
         } else {
             return false;
@@ -123,75 +122,83 @@ function getAllModuleSecurities(module: projects.IModule): security.IModuleSecur
     });
 }
 
-function loadModSec(modSec: security.IModuleSecurity): when.Promise<security.ModuleSecurity> {
-    return loadAsPromise(modSec);
+async function loadAllModuleSecurities(moduleSecurities: security.IModuleSecurity[], userRole: security.UserRole):Promise<void>{
+    await Promise.all(moduleSecurities.map(async (mSecurity) => processLoadedModSec(mSecurity,userRole)));
 }
 
-function processLoadedModSec(modSec: security.IModuleSecurity, userRole: security.UserRole, ):when.Promise<void>{
-    return when.all<void>(modSec.moduleRoles.map(modRole => processModRole(modRole,userRole)));
+async function processLoadedModSec(modSec: security.IModuleSecurity, userRole: security.UserRole):Promise<void>{
+    await Promise.all(modSec.moduleRoles.map(async (modRole) => processModRole(modRole,userRole)));
 }
 
-function processModRole(modRole:security.IModuleRole, userRole:security.UserRole):when.Promise<void>{
+
+
+async function loadModSec(modSec: security.IModuleSecurity): Promise<security.ModuleSecurity> {
+    // console.debug(`Processing loadModSec`);
+    return modSec.load();
+}
+
+
+
+async function processModRole(modRole:security.IModuleRole, userRole:security.UserRole):Promise<void>{
     if(addIfModuleRoleInUserRole(modRole, userRole)){
-        return detailEntitySecurity(modRole,userRole);
+        await Promise.all(modRole.containerAsModuleSecurity.containerAsModule.domainModel.entities.map(async (entity) =>
+            processAllEntitySecurityRules(entity,modRole,userRole).then(()=> processAllPages(modRole,userRole)).then(()=>processAllMicroflows(modRole,userRole))));
     }
-    return when.resolve();
+
+}
+async function processAllEntitySecurityRules(entity:domainmodels.IEntity,moduleRole:security.IModuleRole,userRole:security.UserRole):Promise<void>{
+    await entity.load().then(loadedEntity => 
+        checkIfModuleRoleIsUsedForEntityRole(loadedEntity,loadedEntity.accessRules, moduleRole,userRole));
 }
 
-function detailEntitySecurity(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
-    return when.all<void>(modRole.containerAsModuleSecurity.containerAsModule.domainModel.entities.map(entity =>
-        processAllEntitySecurityRules(entity,modRole,userRole))).then(()=> processAllPages(modRole,userRole)).then(()=>processAllMicroflows(modRole,userRole));
+async function processAllPages(modRole:security.IModuleRole,userRole:security.UserRole):Promise<void>{
+    await Promise.all(modRole.model.allPages().map(async (page) => processPage(modRole,userRole,page)));
 }
 
-function processAllPages(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
-    return when.all<void>(modRole.model.allPages().map(page => processPage(modRole,userRole,page)));
-}
-
-function processPage(modRole:security.IModuleRole, userRole:security.UserRole, page:pages.IPage):when.Promise<void>{
-        return loadAsPromise(page).then(loadedPage =>addPage(modRole,userRole,loadedPage));       
+async function processPage(modRole:security.IModuleRole, userRole:security.UserRole, page:pages.IPage):Promise<void>{
+        await page.load().then(loadedPage =>addPage(modRole,userRole,loadedPage));       
 }
 
 function addPage(modRole:security.IModuleRole, userRole:security.UserRole, loadedPage:pages.Page){
-    if(loadedPage.allowedRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
-        sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`);
-    }else{
-        sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`);
-
-    }
+	if(loadedPage.allowedRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
+		sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`]);
+		// console.debug(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`True`);
+		// console.debug(`Add page: ${modRole.name}`,`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`);
+	}else{
+		sheetPages.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`]);
+		// console.debug(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${loadedPage.name}`,`False`);
+	}
 }
 
-function processAllMicroflows(modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
-    return when.all<void>(modRole.model.allMicroflows().map(microflow => processMicroflow(modRole,userRole,microflow)));
+
+
+async function processAllMicroflows(modRole:security.IModuleRole,userRole:security.UserRole):Promise<void>{
+    await Promise.all(modRole.model.allMicroflows().map(async (microflow) => processMicroflow(modRole,userRole,microflow)));
 }
 
-function processMicroflow(modRole:security.IModuleRole, userRole:security.UserRole, microflow:microflows.IMicroflow):when.Promise<void>{
-        return loadAsPromise(microflow).then(microflowLoaded => addMicroflow(modRole,userRole,microflowLoaded));
+async function processMicroflow(modRole:security.IModuleRole, userRole:security.UserRole, microflow:microflows.IMicroflow):Promise<void>{
+        await microflow.load().then(microflowLoaded => addMicroflow(modRole,userRole,microflowLoaded));
 }
 function addMicroflow(modRole:security.IModuleRole, userRole:security.UserRole, microflowLoaded:microflows.Microflow){
     if(microflowLoaded.allowedModuleRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
         sheetMicroflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`);
+        // console.debug(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`);
+		// console.debug(`Add MF: ${modRole.name}`,`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`);
     }else{
         sheetMicroflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`]);
-        console.log(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`);
+        // console.debug(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`);
     }
 }
 
-function processAllEntitySecurityRules(entity:domainmodels.IEntity,moduleRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
-    return loadAsPromise(entity).then(loadedEntity => 
-        checkIfModuleRoleIsUsedForEntityRole(loadedEntity,loadedEntity.accessRules, moduleRole,userRole));
-}
 
-function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessRules:domainmodels.AccessRule[], modRole:security.IModuleRole,userRole:security.UserRole):when.Promise<void>{
-    return when.all<void>(
-        accessRules.map(rule =>{
+
+async function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessRules:domainmodels.AccessRule[], modRole:security.IModuleRole,userRole:security.UserRole):Promise<void>{
+    await Promise.all(accessRules.map(async (rule) =>{
             var memberRules = ``;
             if(rule.moduleRoles.filter(entityModRule =>{
                 return entityModRule.name === modRole.name;
             }).length > 0){
-                    rule.memberAccesses.map(memRule =>{
+                    rule.memberAccesses.map( async (memRule) =>{
                         if(memRule != null){
                             if(memRule.accessRights!= null && memRule.attribute != null){
                                 memberRules += `${memRule.attribute.name}: ${memRule.accessRights.name}\n`;
@@ -211,15 +218,13 @@ function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessR
                     createDelete = `None`
                  }
                 sheet.data.push([`${userRole.name}`,`${entity.containerAsDomainModel.containerAsModule.name}`,`${modRole.name}`,`${entity.name}`,`${rule.xPathConstraint}`,`${createDelete}`,`${memberRules}`]);
-                console.log(`${userRole.name},${entity.containerAsDomainModel.containerAsModule.name},${modRole.name},${entity.name},${rule.xPathConstraint},${createDelete},${memberRules}`);
+                // console.debug(`${userRole.name},${entity.containerAsDomainModel.containerAsModule.name},${modRole.name},${entity.name},${rule.xPathConstraint},${createDelete},${memberRules}`);
             }
-        })
-    );
-
+        }));
 }
 
 function addIfModuleRoleInUserRole(modRole: security.IModuleRole, userRole: security.UserRole): boolean{
-        console.log(`Processing module role: ${modRole.name}`);
+        // console.debug(`Processing module role: ${modRole.name}`);
         if (userRole.moduleRoles.filter(modRoleFilter => {
             if (modRoleFilter != null) {
                 return modRoleFilter.name === modRole.name;
@@ -234,46 +239,17 @@ function addIfModuleRoleInUserRole(modRole: security.IModuleRole, userRole: secu
         
 }
 
-function getAllModules(workingCopy: OnlineWorkingCopy): projects.IModule[] {
-    return workingCopy.model().allModules();
-}
-
-function processDomainModel(module: projects.IModule, role: security.UserRole): when.Promise<void> {
-    return when.all<void>(module.domainModel.entities.map((entity) => checkEntity(entity)));
-}
-
-function checkEntity(entity: domainmodels.IEntity) {
-    return loadAsPromise(entity).then(ent => {
-        ent.accessRules
-    });
-}
-
 /**
 * This function loads the project security.
 */
-function loadProjectSecurity(workingCopy: OnlineWorkingCopy): when.Promise<security.ProjectSecurity> {
-    var security = workingCopy.model().allProjectSecurities()[0];
-    return when.promise<security.ProjectSecurity>((resolve, reject) => {
-        if (security) {
-            security.load(secure => {
-                if (secure) {
-                    console.log(`Loaded security`);
-                    resolve(secure);
-                } else {
-                    console.log(`Failed to load security`);
-                    reject(`Failed to load security`);
-                }
-            });
-        } else {
-            reject(`'security' is undefined`);
-        }
-    });
+async function loadProjectSecurity(workingCopy: OnlineWorkingCopy): Promise<security.ProjectSecurity> {
+    
+    var model:IModel = await workingCopy.openModel();
+    var security = model.allProjectSecurities()[0];
+    return await security.load();
 }
 
 function getAllUserRoles(projectSecurity: security.ProjectSecurity): security.UserRole[] {
+    console.log("All user roles retrieved");
     return projectSecurity.userRoles;
 }
-
-
-
-
