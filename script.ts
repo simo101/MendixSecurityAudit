@@ -1,6 +1,6 @@
 import { MendixPlatformClient, OnlineWorkingCopy} from "mendixplatformsdk";
-import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus, IList } from "mendixmodelsdk";
-const appId = "{{appID}}";
+import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus, IList, nanoflows } from "mendixmodelsdk";
+const appId = "{{AppID}}";
 const branchName = null // null for mainline
 const wc = null;
 const client = new MendixPlatformClient();
@@ -40,6 +40,16 @@ sheetMicroflows.data[0][1] = `Module`;
 sheetMicroflows.data[0][2] = `Module Role`;
 sheetMicroflows.data[0][3] = `Microflows`;
 sheetMicroflows.data[0][4] = `Allowed`;
+
+const sheetNanoflows = xlsx.makeNewSheet ();
+sheetNanoflows.name = 'Nanoflows';
+
+sheetNanoflows.data[0]=[];
+sheetNanoflows.data[0][0] = `User Role`;
+sheetNanoflows.data[0][1] = `Module`;
+sheetNanoflows.data[0][2] = `Module Role`;
+sheetNanoflows.data[0][3] = `Nanoflows`;
+sheetNanoflows.data[0][4] = `Allowed`;
   
 /*
  * PROJECT TO ANALYZE
@@ -142,7 +152,10 @@ async function loadModSec(modSec: security.IModuleSecurity): Promise<security.Mo
 async function processModRole(modRole:security.IModuleRole, userRole:security.UserRole):Promise<void>{
     if(addIfModuleRoleInUserRole(modRole, userRole)){
         await Promise.all(modRole.containerAsModuleSecurity.containerAsModule.domainModel.entities.map(async (entity) =>
-            processAllEntitySecurityRules(entity,modRole,userRole).then(()=> processAllPages(modRole,userRole)).then(()=>processAllMicroflows(modRole,userRole))));
+            processAllEntitySecurityRules(entity,modRole,userRole)
+            .then(()=> processAllPages(modRole,userRole))
+            .then(()=>processAllMicroflows(modRole,userRole))
+            .then(()=>processAllNanoflows(modRole,userRole))));
     }
 
 }
@@ -171,7 +184,7 @@ function addPage(modRole:security.IModuleRole, userRole:security.UserRole, loade
 }
 
 
-
+///section to process microflows
 async function processAllMicroflows(modRole:security.IModuleRole,userRole:security.UserRole):Promise<void>{
     await Promise.all(modRole.model.allMicroflows().map(async (microflow) => processMicroflow(modRole,userRole,microflow)));
 }
@@ -190,6 +203,24 @@ function addMicroflow(modRole:security.IModuleRole, userRole:security.UserRole, 
     }
 }
 
+///section to process nanoflows
+async function processAllNanoflows(modRole:security.IModuleRole,userRole:security.UserRole):Promise<void>{
+    await Promise.all(modRole.model.allNanoflows().map(async (nanoflow) => processNanoflow(modRole,userRole,nanoflow)));
+}
+
+async function processNanoflow(modRole:security.IModuleRole, userRole:security.UserRole, nanoflow:microflows.INanoflow):Promise<void>{
+        await nanoflow.load().then(nanoflowLoaded => addNanoflow(modRole,userRole,nanoflowLoaded));
+}
+function addNanoflow(modRole:security.IModuleRole, userRole:security.UserRole, nanoflowLoaded:microflows.Nanoflow){
+    if(nanoflowLoaded.allowedModuleRoles.filter(allowedRole => allowedRole.name == modRole.name).length > 0){
+        sheetNanoflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${nanoflowLoaded.name}`,`True`]);
+        // console.debug(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`True`);
+		// console.debug(`Add MF: ${modRole.name}`,`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`);
+    }else{
+        sheetNanoflows.data.push([`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${nanoflowLoaded.name}`,`False`]);
+        // console.debug(`${userRole.name}`,`${modRole.containerAsModuleSecurity.containerAsModule.name}`,`${modRole.name}`,`${microflowLoaded.name}`,`False`);
+    }
+}
 
 
 async function checkIfModuleRoleIsUsedForEntityRole(entity:domainmodels.Entity,accessRules:domainmodels.AccessRule[], modRole:security.IModuleRole,userRole:security.UserRole):Promise<void>{
